@@ -32,12 +32,18 @@ class Module:
     def train(self) -> None:
         "Set the mode of this module and all descendent modules to `train`."
         # TODO: Implement for Task 0.4.
-        raise NotImplementedError('Need to implement for Task 0.4')
+        # raise NotImplementedError('Need to implement for Task 0.4')
+        self.training = True
+        for module in self._modules.values():
+            module.train()
 
     def eval(self) -> None:
         "Set the mode of this module and all descendent modules to `eval`."
         # TODO: Implement for Task 0.4.
-        raise NotImplementedError('Need to implement for Task 0.4')
+        # raise NotImplementedError('Need to implement for Task 0.4')
+        self.training = False
+        for module in self._modules.values():
+            module.eval()
 
     def named_parameters(self) -> Sequence[Tuple[str, Parameter]]:
         """
@@ -48,12 +54,25 @@ class Module:
             The name and `Parameter` of each ancestor parameter.
         """
         # TODO: Implement for Task 0.4.
-        raise NotImplementedError('Need to implement for Task 0.4')
+        # raise NotImplementedError('Need to implement for Task 0.4')
+        return_val = []
+        for param_tuple in self._parameters.items():
+            return_val.append(param_tuple)
+        for module in self._modules.values():
+            return_val += module.named_parameters()
+        return return_val
+        
 
     def parameters(self) -> Sequence[Parameter]:
         "Enumerate over all the parameters of this module and its descendents."
         # TODO: Implement for Task 0.4.
-        raise NotImplementedError('Need to implement for Task 0.4')
+        # raise NotImplementedError('Need to implement for Task 0.4')
+        return_val = []
+        for param_ in self._parameters.values():
+            return_val.append(param_)
+        for module in self._modules.values():
+            return_val += module.parameters()
+        return return_val
 
     def add_parameter(self, k: str, v: Any) -> Parameter:
         """
