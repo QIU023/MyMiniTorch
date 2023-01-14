@@ -100,43 +100,65 @@ class Mul(Function):
     @staticmethod
     def forward(ctx: Context, a: Tensor, b: Tensor) -> Tensor:
         # TODO: Implement for Task 2.3.
-        raise NotImplementedError('Need to implement for Task 2.3')
+        # raise NotImplementedError('Need to implement for Task 2.3')
+        ctx.save_for_backward(a, b)
+        return a.f.mul_zip(a, b)
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
         # TODO: Implement for Task 2.4.
-        raise NotImplementedError('Need to implement for Task 2.4')
+        # raise NotImplementedError('Need to implement for Task 2.4')
+        (a, b) = ctx.saved_tensors()
+        return grad_output.f.mul_zip(b, grad_output), grad_output.f.mul_zip(a, grad_output)
 
 
 class Sigmoid(Function):
     @staticmethod
     def forward(ctx: Context, t1: Tensor) -> Tensor:
         # TODO: Implement for Task 2.3.
-        raise NotImplementedError('Need to implement for Task 2.3')
+        # raise NotImplementedError('Need to implement for Task 2.3')
+        sig_res = t1.f.sigmoid_map(t1)
+        ctx.save_for_backward(sig_res)
+        return sig_res
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tensor:
         # TODO: Implement for Task 2.4.
-        raise NotImplementedError('Need to implement for Task 2.4')
+        # raise NotImplementedError('Need to implement for Task 2.4')
+        (sig_res, ) = ctx.saved_tensors()
+        return grad_output.f.mul_zip(grad_output, 
+                    grad_output.f.mul_zip(sig_res, 
+                        grad_output.f.add_zip(
+                            (tensor([1])), 
+                            grad_output.f.neg_map(sig_res)
+                        )
+                    )
+                )
 
 
 class ReLU(Function):
     @staticmethod
     def forward(ctx: Context, t1: Tensor) -> Tensor:
         # TODO: Implement for Task 2.3.
-        raise NotImplementedError('Need to implement for Task 2.3')
+        # raise NotImplementedError('Need to implement for Task 2.3')
+        ctx.save_for_backward(t1)
+        return t1.f.relu_map(t1)
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tensor:
         # TODO: Implement for Task 2.4.
-        raise NotImplementedError('Need to implement for Task 2.4')
+        # raise NotImplementedError('Need to implement for Task 2.4')
+        (t1, ) = ctx.saved_tensors()
+        return grad_output.f.relu_back_zip(t1, grad_output)
 
 
 class Log(Function):
     @staticmethod
     def forward(ctx: Context, t1: Tensor) -> Tensor:
         # TODO: Implement for Task 2.3.
-        raise NotImplementedError('Need to implement for Task 2.3')
+        # raise NotImplementedError('Need to implement for Task 2.3')
+        ctx.save_for_backward(t1)
+        return t1.f.log_map(t1)
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tensor:
