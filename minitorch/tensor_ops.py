@@ -12,6 +12,7 @@ from .tensor_data import (
     index_to_position,
     shape_broadcast,
     to_index,
+    IndexingError
 )
 
 if TYPE_CHECKING:
@@ -222,10 +223,105 @@ class SimpleOps(TensorOps):
 
     @staticmethod
     def matrix_multiply(a: "Tensor", b: "Tensor") -> "Tensor":
-        raise NotImplementedError("Not implemented in this assignment")
+        # raise NotImplementedError("Not implemented in this assignment")
+        a_shape = a._tensor.shape
+        b_shape = b._tensor.shape
+        
+        assert a_shape[-1] == b_shape[-2], "Size mismatch for Tensor: {} and {}".format(a_shape, b_shape)
+        out_shape_last2 = a_shape[-2]+b_shape[-1]
+        try:
+            out_shape_first = shape_broadcast(a_shape[:-2], b_shape[:-2])
+        except IndexingError:
+            raise IndexingError("Tensor broadcast for matmul failed!")
+        out_shape = out_shape_first + out_shape_last2
+        out = a.zeros(tuple(out_shape))
+
+        tensor_matrix_multiply(*out.tuple(), *a.tuple(), *b.tuple())
+        return out
+    
+        # more familiar version for MatMul
+        # def matrix_mul_2d(s1, s2, s0):
+        #     for i in range(s1):
+        #         for j in range(s2):
+        #             su = 0.
+        #             for k in range(s0):
+        #                 su += a._tensor.get([i, k])*b._tensor.get([k, j])
+        #             out._tensor.set([i, j], su)
+
+
+
+        # return a.__matmul__(b)
 
     is_cuda = False
 
+
+
+def tensor_matrix_multiply(
+    out: Storage,
+    out_shape: Shape,
+    out_strides: Strides,
+    a_storage: Storage,
+    a_shape: Shape,
+    a_strides: Strides,
+    b_storage: Storage,
+    b_shape: Shape,
+    b_strides: Strides,
+) -> None:
+    """
+    Normal tensor matrix multiply function.
+
+    Should work for any tensor shapes that broadcast as long as
+
+    ```
+    assert a_shape[-1] == b_shape[-2]
+    ```
+    Args:
+        out (Storage): storage for `out` tensor
+        out_shape (Shape): shape for `out` tensor
+        out_strides (Strides): strides for `out` tensor
+        a_storage (Storage): storage for `a` tensor
+        a_shape (Shape): shape for `a` tensor
+        a_strides (Strides): strides for `a` tensor
+        b_storage (Storage): storage for `b` tensor
+        b_shape (Shape): shape for `b` tensor
+        b_strides (Strides): strides for `b` tensor
+
+    Returns:
+        None : Fills in `out`
+    """
+    # a_batch_stride = a_strides[0] if a_shape[0] > 1 else 0
+    # b_batch_stride = b_strides[0] if b_shape[0] > 1 else 0
+
+    # # TODO: Implement for Task 3.2.
+    # raise NotImplementedError('Need to implement for Task 3.2')
+    s0 = a_shape[-1]
+    out_num_dim = len(out_shape)
+
+    # for each 1D index:
+    #   getting its corr shape position(c[i,j])
+    #   finding a[i,k] and b[k,j]
+
+
+    # 1D storage value filling for MatMul, too abstracting!
+    for i in range(len(out)):
+        out_index = np.zeros(MAX_DIMS, np.int32)
+        to_index(i, out_shape, out_index)
+        o = index_to_position(out_index, out_strides)
+        a_index = np.copy(out_index)
+        b_index = np.zeros(MAX_DIMS, np.int32)
+        a_index[out_num_dim - 1] = 0
+        b_index[out_num_dim - 2] = 0
+        b_index[out_num_dim - 1] = out_index[out_num_dim - 1]
+        temp_sum = 0.
+        for w in range(s0):
+            a_index[out_num_dim - 1] = w
+            b_index[out_num_dim - 2] = w
+
+            j = index_to_position(a_index, a_strides)
+            m = index_to_position(b_index, b_strides)
+            temp_sum = temp_sum + a_storage[j] * b_storage[m]
+
+        out[o] = temp_sum
 
 # Implementations.
 
