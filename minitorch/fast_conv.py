@@ -81,7 +81,38 @@ def _tensor_conv1d(
     s2 = weight_strides
 
     # TODO: Implement for Task 4.1.
-    raise NotImplementedError('Need to implement for Task 4.1')
+    # raise NotImplementedError('Need to implement for Task 4.1')
+    # input: [b, c1, w], weight: [c2, c1, kw], out: [b, c2, ow]
+    # ow = (w - kw + 1)
+    # for bi in range(b):
+    #     for ci2 in range(c2):
+    #         tmp = np.zeros(c1)
+    #         for wi in range(kw):
+    #             for ci1 in range(c1):
+    #                 tmp[ci1] += input[bi, ci1, wi] * weight[ci2, ci1, wi]
+    #         out[bi, ci2, 0] = tmp.sum()
+    #         for wi in range(w - kw):
+    #             for ci1 in range(c1):
+    #                 tmp[ci1] += input[bi, ci1, wi + kw] * weight[ci2, ci1, wi + kw]
+    #                 tmp[ci1] -= input[bi, ci1, wi] * weight[ci2, ci1, wi]
+    #             out[bi, ci2, wi + kw] = tmp.sum()
+                    
+    # out_index = np.zeros(len(out_shape), dtype=np.int32)
+    
+    # for b in prange(batch):
+    for pos in prange(out_size):
+        out_index: Index = np.empty(MAX_DIMS, np.int32)
+        to_index(pos, out_index, out_index)
+        batch_idx, out_channel_idx, out_width_idx = out_index[0], out_index[1], out_index[2]
+        for in_channel_idx in prange(in_channels):
+            for weight_idx in range(kw):
+                input_idx = (out_width_idx - weight_idx) if reverse else out_width_idx + weight_idx
+                weight_pos = out_channel_idx*s2[0] + in_channel_idx*s2[1] + weight_idx*s2[2]
+                input_val = 0.
+                if input_idx >= 0 and input_idx <= width:
+                    input_pos = batch_idx*s1[0] + in_channel_idx*s1[1] + input_idx*s1[2]
+                    input_val = input[input_pos]
+                out[pos] += input_val * weight[weight_pos]
 
 
 tensor_conv1d = njit(parallel=True)(_tensor_conv1d)
@@ -207,8 +238,23 @@ def _tensor_conv2d(
     s20, s21, s22, s23 = s2[0], s2[1], s2[2], s2[3]
 
     # TODO: Implement for Task 4.2.
-    raise NotImplementedError('Need to implement for Task 4.2')
-
+    # raise NotImplementedError('Need to implement for Task 4.2')
+    # 1D to 2D
+    for pos in prange(out_size):
+        out_index: Index = np.empty(MAX_DIMS, np.int32)
+        to_index(pos, out_index, out_index)
+        batch_idx, out_channel_idx, out_height_idx, out_width_idx = out_index[0], out_index[1], out_index[2], out_index[3]
+        for in_channel_idx in prange(in_channels):
+            for weight_h_idx in range(kw):
+                for weight_w_idx in range(kw):
+                    h_idx = (out_height_idx - weight_h_idx) if reverse else out_height_idx + weight_h_idx
+                    w_idx = (out_width_idx - weight_w_idx) if reverse else out_width_idx + weight_w_idx
+                    weight_pos = out_channel_idx*s20 + in_channel_idx*s21 + weight_h_idx*s22 + weight_w_idx*s23
+                    input_val = 0.
+                    if h_idx >= 0 and h_idx <= height and w_idx >= 0 and w_idx <= width:
+                        input_pos = batch_idx*s10 + in_channel_idx*s11 + h_idx*s12 + w_idx*s13
+                        input_val = input[input_pos]
+                    out[pos] += input_val * weight[weight_pos]
 
 tensor_conv2d = njit(parallel=True, fastmath=True)(_tensor_conv2d)
 

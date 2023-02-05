@@ -150,11 +150,17 @@ def tensor_map(
         in_strides: Strides,
     ) -> None:
 
-        out_index = cuda.local.array(MAX_DIMS, numba.int32)
-        in_index = cuda.local.array(MAX_DIMS, numba.int32)
         i = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
-        # TODO: Implement for Task 3.3.
-        raise NotImplementedError('Need to implement for Task 3.3')
+        if i < len(out):
+            out_index = cuda.local.array(MAX_DIMS, numba.int32)
+            in_index = cuda.local.array(MAX_DIMS, numba.int32)
+            # TODO: Implement for Task 3.3.
+            # raise NotImplementedError('Need to implement for Task 3.3')
+            to_index(i, out_shape, out_index)
+            broadcast_index(out_index, out_shape, in_shape, in_index)
+            o = index_to_position(out_index, out_strides)
+            j = index_to_position(in_index, in_strides)
+            out[o] = fn(in_storage[j])
 
     return cuda.jit()(_map)  # type: ignore
 
@@ -190,13 +196,22 @@ def tensor_zip(
         b_strides: Strides,
     ) -> None:
 
-        out_index = cuda.local.array(MAX_DIMS, numba.int32)
-        a_index = cuda.local.array(MAX_DIMS, numba.int32)
-        b_index = cuda.local.array(MAX_DIMS, numba.int32)
         i = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
 
         # TODO: Implement for Task 3.3.
-        raise NotImplementedError('Need to implement for Task 3.3')
+        # raise NotImplementedError('Need to implement for Task 3.3')
+        if i < len(out):
+            out_index = cuda.local.array(MAX_DIMS, numba.int32)
+            a_index = cuda.local.array(MAX_DIMS, numba.int32)
+            b_index = cuda.local.array(MAX_DIMS, numba.int32)
+            to_index(i, out_shape, out_index)
+            o = index_to_position(out_index, out_strides)
+            broadcast_index(out_index, out_shape, a_shape, a_index)
+            j = index_to_position(a_index, a_strides)
+            broadcast_index(out_index, out_shape, b_shape, b_index)
+            k = index_to_position(b_index, b_strides)
+            out[o] = fn(a_storage[j], b_storage[k])
+
 
     return cuda.jit()(_zip)  # type: ignore
 
@@ -229,8 +244,23 @@ def _sum_practice(out: Storage, a: Storage, size: int) -> None:
     pos = cuda.threadIdx.x
 
     # TODO: Implement for Task 3.3.
-    raise NotImplementedError('Need to implement for Task 3.3')
-
+    # raise NotImplementedError('Need to implement for Task 3.3')
+    # cuda.syncthreads()
+    if i < size:
+        cache[pos] = a[i]
+        cuda.syncthreads()
+    else:
+        cache[pos] = 0.
+    
+    if i < size:
+        for j in range(5):
+            j = 2**j
+            if pos % (2*j) == 0:
+                cache[pos] += cache[pos + j]
+                cuda.syncthreads()
+        if pos == 0:
+            out[cuda.blockIdx.x] = cache[0]
+    
 
 jit_sum_practice = cuda.jit()(_sum_practice)
 
@@ -273,13 +303,34 @@ def tensor_reduce(
         reduce_value: float,
     ) -> None:
         BLOCK_DIM = 1024
-        cache = cuda.shared.array(BLOCK_DIM, numba.float64)
-        out_index = cuda.local.array(MAX_DIMS, numba.int32)
         out_pos = cuda.blockIdx.x
         pos = cuda.threadIdx.x
 
         # TODO: Implement for Task 3.3.
-        raise NotImplementedError('Need to implement for Task 3.3')
+        # raise NotImplementedError('Need to implement for Task 3.3')
+        
+        if out_pos < out_size:
+            cache = cuda.shared.array(BLOCK_DIM, numba.float64)
+            out_index = cuda.local.array(MAX_DIMS, numba.int32)
+
+            to_index(out_pos, out_shape, out_index)
+            max_dim = a_shape[reduce_dim]
+            out_index[reduce_dim] = out_index[reduce_dim] * BLOCK_DIM + pos
+
+            if out_index[reduce_dim] < max_dim:
+                o = index_to_position(out_index, a_strides)
+                cache[pos] = a_storage[o]
+                cuda.syncthreads()
+
+                for j in range(11):
+                    if pos % (2*j) == 0:
+                        cache[pos] = fn(cache[pos], cache[pos + j])
+                        cuda.syncthreads()
+
+                if pos == 0:
+                    o2 = index_to_position(out_index, out_strides)
+                    out[o2] = cache[0]
+
 
     return cuda.jit()(_reduce)  # type: ignore
 
@@ -316,8 +367,21 @@ def _mm_practice(out: Storage, a: Storage, b: Storage, size: int) -> None:
     """
     BLOCK_DIM = 32
     # TODO: Implement for Task 3.3.
-    raise NotImplementedError('Need to implement for Task 3.3')
+    # raise NotImplementedError('Need to implement for Task 3.3')
+    a_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
+    b_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
 
+    i = cuda.threadIdx.x
+    j = cuda.threadIdx.y
+
+    a_shared[i, j] = a[i*size + j]
+    b_shared[i, j] = b[i*size + j]
+    cuda.syncthreads()
+
+    tmp = 0.
+    for k in range(size):
+        tmp += a_shared[i, k] * b_shared[k, j]
+    out[i*size + j] = tmp
 
 jit_mm_practice = cuda.jit()(_mm_practice)
 
@@ -386,7 +450,20 @@ def _tensor_matrix_multiply(
     #    b) Copy into shared memory for b matrix
     #    c) Compute the dot produce for position c[i, j]
     # TODO: Implement for Task 3.4.
-    raise NotImplementedError('Need to implement for Task 3.4')
-
+    # raise NotImplementedError('Need to implement for Task 3.4')
+    tmp = 0.
+    for idx in range(0, a_shape[2], BLOCK_DIM):
+        k = idx + pj
+        if i < a_shape[1] and k < a_shape[2]:
+            a_shape[pi, pj] = a_storage[a_batch_stride*batch + a_strides[1]*i + a_strides[2]*k]
+        k = idx + pi
+        if j < b_shape[2] and k < b_shape[1]:
+            b_shape[pi, pj] = b_storage[b_batch_stride*batch + b_strides[1]*k + b_strides[2]*j]
+        cuda.syncthreads()
+        for k in range(BLOCK_DIM):
+            if (idx + k) < a_shape[2]:
+                tmp += a_shared[pi, k] * b_shared[k, pj]
+    if i < out_shape[1] and j < out_shape[2]:
+        out[out_strides[0]*batch + out_strides[1]*i + out_strides[2]*j] = tmp
 
 tensor_matrix_multiply = cuda.jit(_tensor_matrix_multiply)
